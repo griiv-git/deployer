@@ -1,0 +1,13 @@
+{
+    "name": "griiv/deployer",
+    "description": "Deployer with Griiv specification",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Arnaud Scoté",
+            "email": "arnaud@griiv.fr"
+        }
+    ],
+    "require": {}
+}
