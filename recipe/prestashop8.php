@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Deployer;
 
-use Symfony\Component\Console\Input\InputOption;
+use Deployer\Exception\Exception;
+
 require 'recipe/common.php';
-require 'contrib/rsync.php';
+require 'recipe/deploy/release.php';
 
 
 add('recipes', ['prestashop8']);
@@ -38,14 +39,15 @@ set('shared_dirs', [
         'www/tools',
         'www/translations',
         'www/upload',
-        'www/var',
+        'www/var/logs',
         'www/app/logs',
         'www/app/Resources/translations/',
         'www/modules/blockreassurance/img',
         'www/modules/blockreassurance/views/img',
+        'www/modules/prestablog/views/img',
         'www/themes/classic/translations/',
         'www/themes/child-theme/translations/',
-    ]
+        ]
 );
 
 // Writable dirs by web server
@@ -63,9 +65,11 @@ set('writable_dirs', [
         'www/app/Resources/translations/',
         'www/modules/blockreassurance/img',
         'www/modules/blockreassurance/views/img',
+        'www/modules/blockreassurance/views/img/img_perso',
         'www/themes/classic/translations/',
         'www/themes/child-theme/translations/',
         'www/themes/hummingbird/translations/',
+        'www/themes/hummingbird/assets/cache',
     ]
 );
 
@@ -91,15 +95,19 @@ task('prestashop:cache:warmup', function(){
 
 //Task prestashop theme build
 task('prestashop:theme:build', function(){
-    //docker exec -i node16 bash -c "cd lemaitre/www/themes/hummingbird && npm run build"
-    writeln('{{bin/docker}} exec -i {{docker_container_node}} bash -c "cd {{application}}/www/themes/{{theme}} && npm run build"');
-    runLocally('{{bin/docker}} exec -i {{docker_container_node}} bash -c "cd {{application}}/www/themes/{{theme}} && npm run build"');
+    if(!get('docker_node')) {
+        writeln('cd {{prestashop_root}}/themes/{{theme}} && npm run build');
+        runLocally('cd {{prestashop_root}}/themes/{{theme}} && npm run build');
+    } else {
+        writeln('{{bin/docker}} exec -i {{docker_container_node}} bash -c "cd {{application}}/www/themes/{{theme}} && npm run build"');
+        runLocally('{{bin/docker}} exec -i {{docker_container_node}} bash -c "cd {{application}}/www/themes/{{theme}} && npm run build"');
+    }
 });
 
 
 task('deploy:theme', function(){
     set('rsync_src', '{{prestashop_root}}/themes/{{theme}}/assets');
-    set('rsync_dest', '{{release_path}}/www/themes/{{theme}}/assets');
+    set('rsync_dest', '{{release_or_current_path}}/www/themes/{{theme}}/assets');
     invoke('rsync');
 });
 
@@ -113,16 +121,6 @@ task('deploy:vendors', function () {
     run('cd {{release_or_current_path}}/www && {{bin/composer}} {{composer_action}} {{composer_options}} 2>&1');
 });
 
-option('source', null, InputOption::VALUE_REQUIRED, 'rsync source path');
-option('destination', null, InputOption::VALUE_REQUIRED, 'rsync destination path');
-
-task('upload', function() {
-    $source = input()->getOption('source');
-    $destination = input()->getOption('destination');
-    set('rsync_src', $source);
-    set('rsync_dest', $destination);
-    invoke('rsync');
-})->desc('upload files or directory with rsync');
 
 // Task deploy:preprare
 desc('Prepares a new release');
@@ -135,7 +133,6 @@ task('deploy:prepare', [
     'deploy:update_code',
     'deploy:vendors',
     'deploy:shared',
-    'deploy:writable',
 ]);
 
 //task deploy
@@ -144,12 +141,22 @@ task('deploy', [
     'deploy:prepare',
     'deploy:clear_paths',
     'deploy:publish',
+    'deploy:writable',
     'prestashop:cache:clear',
     'prestashop:cache:warmup',
-    'prestashop:theme:build',
-    'deploy:theme'
 ]);
 
 
+
+desc('deploy dirty');
+task('deploy:dirty', function() {
+    //release_path is the current path...
+    set('release_path', get('current_path'));
+    invoke('deploy:update_code');
+    invoke('deploy:shared');
+    invoke('deploy:writable');
+    invoke('prestashop:cache:clear');
+    invoke('prestashop:cache:warmup');
+});
 
 after('deploy:failed', 'deploy:unlock');

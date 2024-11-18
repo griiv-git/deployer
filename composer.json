@@ -9,5 +9,7 @@
             "email": "arnaud@griiv.fr"
         }
     ],
-    "require": {}
+    "require": {
+        "deployer/deployer": "^7.5"
+    }
 }
