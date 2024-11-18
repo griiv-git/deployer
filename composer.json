@@ -10,6 +10,6 @@
         }
     ],
     "require": {
-        "deployer/deployer": "^7.5"
+        "deployer/deployer": "^7.3"
     }
 }
